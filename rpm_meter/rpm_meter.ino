@@ -1,74 +1,23 @@
-//#define DEBUG 
+/*
+Tachometer using micros
 
-#ifdef DEBUG
-  #define DEBUG_PRINT(x) Serial.print(x)
-  #define DEBUG_PRINTDEC(x) Serial.print(x, DEC)
-  #define DEBUG_PRINTLN(x) Serial.println(x)
-#else
-  #define DEBUG_PRINT(x)
-  #define DEBUG_PRINTDEC(x)
-  #define DEBUG_PRINTLN(x) 
-#endif
+On this sketch we are going to measure the period between pulses using the micros() function to get the RPM
+(Revolutions Per Minute) from a sensor on pin 2.
+This way of measuring RPM makes it accurate, responsive and versatile. No matter how fast or slow the loop is
+running, the reading accuracy is not going to be affected. Although, the faster you run the loop, the more amount
+of readings you are going to be able to display every second.
 
+It's coded in a way that the micros rollover doesn't create glitches every 71 minutes, so it can run forever
+without problems.
 
-#define PIN_subir 4
-#define PIN_bajar 3
-#define PIN_motor_subir A4
-#define PIN_motor_bajar A3
-#define PIN_N 5
-#define PIN_display_N A5
-#define PIN_RPM_RX 9
-#define PIN_RPM_TX 10
+We use an interrupt for the input so you have to choose pin 2 or 3 (for Arduino Uno/nano). In this example we
+use pin 2.
 
+This sketch was made for my video tutorial shown here: https://www.youtube.com/watch?v=u2uJMJWsfsg
 
-
-#define DIR_ARRIBA 1
-#define DIR_ABAJO 0
-#define DELAY_SUBIR_MARCHA 1200
-#define DELAY_BAJAR_MARCHA 1200
-
-#define REFRESCO 600
-
-boolean leva_subir = 0;
-boolean leva_bajar = 0;
-boolean neutral = 0;
-boolean status_leva_subir = 0;
-boolean status_leva_bajar = 0;
-byte marcha = 0;
-byte marcha_ant = 1;
-
-int maxRPM = 12500;
-uint16_t rpm = 0;
-int tmpRPM = 5000; //variable temporal, este valor se debe leer de una entrada
-
-uint32_t tiempo_marcha_subir=millis(); //variables para el control del tiempo de  pulso de activacion del actuador
-uint32_t tiempo_marcha_bajar=millis();
-
-uint32_t mymillis=0; //contador de tiempo  para el refresco de la visualizacion de datos
-
-///**** temporal display 7 segmentos
-#include <TM1638plus.h>
-const int strobe = 8;
-const int clock = 9;
-const int data = 10;
-
-bool high_freq = false; //default false,, If using a high freq CPU > ~100 MHZ set to true. 
-//Constructor object (GPIO STB , GPIO CLOCK , GPIO DIO, use high freq MCU default false)
-TM1638plus tm(strobe, clock ,data, high_freq);
-///****
-
-
-// // *** Puerto serie software comunicacion con el arduino RPM Meter
-// #include <SoftwareSerial.h>
-// //SoftwareSerial softSerial(rx, tx);
-// SoftwareSerial softSerial(PIN_RPM_RX, PIN_RPM_TX);
-
-// byte buff_softserial[2]={0,0}; //buffer almacen puerto serie
-
-
-
-// *** ** ** * *** ** ** **** * ** *  Chapuzas del puto arduino
-
+Made by InterlinkKnight
+Last update: 05/23/2019
+*/
 
 
 ///////////////
@@ -92,6 +41,9 @@ const unsigned long ZeroTimeout = 100000;  // For high response time, a good val
 // Calibration for smoothing RPM:
 const byte numReadings = 2;  // Number of samples for smoothing. The higher, the more smoothing, but it's going to
                              // react slower to changes. 1 = no smoothing. Default: 2.
+
+
+
 
 
 /////////////
@@ -139,93 +91,40 @@ unsigned long total;  // The running total.
 unsigned long average;  // The RPM value after applying the smoothing.
 
 
+#include <SoftwareSerial.h>
+SoftwareSerial softSerial(10, 11);
 
 unsigned int sensorValue = 0;  // variable to store the value coming from the sensor
+byte arr[2] = { 10 , 255 };
 
-/// **** *** ** * ** * ** * ** * chapuzas del puto arduino 
-
-
-void setup()
+void setup()  // Start of setup:
 {
-// // //  **** temporal display 7 segmentos
-pinMode(strobe, OUTPUT);
-pinMode(clock, OUTPUT);
-pinMode(data, OUTPUT);
-
-  tm.displayBegin();
-  delay(500);
- // Test 0 reset test
-  tm.setLED(0, 1);
-  delay(500);
-  tm.reset();
-  tm.displayIntNum(marcha, false);
-
-// ****
-
-    //softSerial.begin(4800);
-    Serial.begin(9600);
-
-    pinMode(PIN_bajar,INPUT);
-    pinMode(PIN_subir,INPUT);
-    pinMode(PIN_N,INPUT);
-    pinMode(PIN_motor_bajar,OUTPUT);
-    pinMode(PIN_motor_subir,OUTPUT);
-    pinMode(PIN_display_N,OUTPUT);
-
-    
-    while(digitalRead(PIN_N)){ 
-        Serial.println("Esperando Neutral.....");
-        delay(1000);
-        digitalWrite(PIN_display_N,HIGH);
-
-
-    } 
-    Serial.println("Empezando la fiesta....");
-    marcha = 1;
-
-
+  
+  Serial.begin(9600);  // Begin serial communication.
   attachInterrupt(digitalPinToInterrupt(2), Pulse_Event, RISING);  // Enable interruption pin 2 when going from LOW to HIGH.
 
-
-}
-
-void loop(){
-   
-   
-
-    leerEntradas();
-    compruebaRPM();
-
-    if (compruebaMarcha()){
-        activarMarcha();
-    }
-
-    
-     displayDatos();
-
-}
+  delay(1000);  // We sometimes take several readings of the period to average. Since we don't have any readings
+                // stored we need a high enough value in micros() so if divided is not going to give negative values.
+                // The delay allows the micros() to be high enough for the first few cycles.
+softSerial.begin(4800);
+}  // End of setup.
 
 
-void leerEntradas()
+
+
+
+void loop()  // Start of loop:
 {
 
-    leva_subir = digitalRead(PIN_subir);
-    leva_bajar = digitalRead(PIN_bajar);
-    neutral = digitalRead(PIN_N);
-
-    // DEBUG_PRINT("  Leva sube:  "); DEBUG_PRINTDEC(leva_subir);
-    // DEBUG_PRINT("  Leva baja:  "); DEBUG_PRINTDEC(leva_bajar);
-    // DEBUG_PRINT("  status_leva subir:  "); DEBUG_PRINTDEC(status_leva_subir);
-    // DEBUG_PRINT("  status_leva bajar:  "); DEBUG_PRINTDEC(status_leva_bajar);
-    // DEBUG_PRINTLN(" ");
-}
-
-void compruebaRPM(){
+  // The following is going to store the two values that might change in the middle of the cycle.
+  // We are going to do math and functions with those values and they can create glitches if they change in the
+  // middle of the cycle.
+  LastTimeCycleMeasure = LastTimeWeMeasured;  // Store the LastTimeWeMeasured in a variable.
+  CurrentMicros = micros();  // Store the micros() in a variable.
 
 
 
- LastTimeCycleMeasure = LastTimeWeMeasured;  // Store the LastTimeWeMeasured in a variable.
- CurrentMicros = micros();  // Store the micros() in a variable.
+
 
   // CurrentMicros should always be higher than LastTimeWeMeasured, but in rare occasions that's not true.
   // I'm not sure why this happens, but my solution is to compare both and if CurrentMicros is lower than
@@ -236,8 +135,15 @@ void compruebaRPM(){
     LastTimeCycleMeasure = CurrentMicros;
   }
 
+
+
+
+
   // Calculate the frequency:
   FrequencyRaw = 10000000000 / PeriodAverage;  // Calculate the frequency using the period between pulses.
+
+
+  
 
   
   // Detect if pulses stopped or frequency is too low, so we can show 0 Frequency:
@@ -251,14 +157,25 @@ void compruebaRPM(){
     ZeroDebouncingExtra = 0;  // Reset the threshold to the normal value so it doesn't bounce.
   }
 
+
+
+
+
   FrequencyReal = FrequencyRaw / 10000;  // Get frequency without decimals.
                                           // This is not used to calculate RPM but we remove the decimals just in case
                                           // you want to print it.
+
+
+
+
 
   // Calculate the RPM:
   RPM = FrequencyRaw / PulsesPerRevolution * 60;  // Frequency divided by amount of pulses per revolution multiply by
                                                   // 60 seconds to get minutes.
   RPM = RPM / 10000;  // Remove the decimals.
+
+
+
 
 
   // Smoothing RPM:
@@ -275,8 +192,12 @@ void compruebaRPM(){
   // Calculate the average:
   average = total / numReadings;  // The average value it's the smoothed result.
 
-rpm=average;
 
+
+
+
+  // Print information on the serial monitor:
+  // Comment this section if you have a display and you don't need to monitor the values on the serial monitor.
   // This is because disabling this section would make the loop run faster.
 //  Serial.print("Period: ");
 //  Serial.print(PeriodBetweenPulses);
@@ -286,108 +207,28 @@ rpm=average;
 //  Serial.print(FrequencyReal);
 //  Serial.print("\tRPM: ");
 //  Serial.println(RPM);
+  //Serial.write(RPM);
 //  Serial.print("\tTachometer: ");
-//  Serial.println(average);
+  Serial.println(average);
+
+  sensorValue = average;
+  arr[0]=lowByte(sensorValue);
+  arr[1]=highByte(sensorValue);
+  
+ //itoa(sensorValue,mystr,10);
+  softSerial.write(arr,2);
 
 
 
- }
+
+
+  
+}  // End of loop.
+
+
+
+
  
-
-
-void(* resetFunc) (void) = 0; //declare reset function @ address 0
-
-boolean compruebaMarcha(){
-    if(neutral==1){
-        digitalWrite(PIN_display_N,HIGH);
-        resetFunc();  //call reset
-        
-    }
-    
-    //ñapa para desactivar los actuadores y no meter un delay
-        if (millis()-tiempo_marcha_subir>DELAY_SUBIR_MARCHA){
-                  digitalWrite(PIN_motor_subir,LOW);
-                  tiempo_marcha_subir=millis();
-                }
-
-        if (millis()-tiempo_marcha_bajar>DELAY_BAJAR_MARCHA){
-                  digitalWrite(PIN_motor_bajar,LOW);
-                  tiempo_marcha_bajar=millis();
-                }
-
-
-    if((tmpRPM<maxRPM) && (marcha>=1 && marcha<=6)) {
-        digitalWrite(PIN_display_N,LOW);
-        return true;
-    }
-    else {
-    return false;
-    }
-
-    
- }
- 
-void displayDatos(){
-    //DEBUG_PRINTLN(rpm);
-    //delay(200);
-    
-    if (mymillis-millis() >=REFRESCO){
-
-      mymillis=millis();
-      //tm.displayIntNum(marcha, false);
-      if (marcha!=marcha_ant){
-        for (byte i=0;i<8;i++){tm.setLED(i,0);}
-      marcha_ant=marcha;
-      }
-      tm.setLED(marcha-1, 1);
-      tm.displayIntNum(rpm, true);
-      //Serial.println(rpm);
-    }
-    
-    //delay(20);
- }
-
-// void activarMotor(byte direccion){
-//     if (direccion == 1){
-//        digitalWrite(PIN_motor_subir,HIGH);
-//        delay(DELAY_SUBIR_MARCHA);
-//        digitalWrite(PIN_motor_subir,LOW);
-            
-//     }
-//     else if  (direccion == 0){
-//       digitalWrite(PIN_motor_bajar,HIGH);
-//       delay(DELAY_BAJAR_MARCHA);
-//       digitalWrite(PIN_motor_bajar,LOW);
-//     }
-
-// }
-
-void activarMarcha(){
-//TODO caso de la primera
-
-    if(status_leva_subir!=leva_subir){
-            if(marcha>=1 && marcha<6 && leva_subir==1){
-                digitalWrite(PIN_motor_subir,HIGH);
-                marcha++;
-                //DEBUG_PRINTLN("   Sube   ");
-            }
-    status_leva_subir=leva_subir;
-    }
-
-    if(status_leva_bajar!=leva_bajar){
-        if (marcha<=6 && marcha>=2 && leva_bajar==1){
-                    digitalWrite(PIN_motor_bajar,HIGH);
-                    marcha--;
-                    //DEBUG_PRINTLN("   Baja   ");
-                }
-    status_leva_bajar=leva_bajar;
-    }
-    
-}
-
-
-
-
 void Pulse_Event()  // The interrupt runs this to calculate the period between pulses:
 {
 
