@@ -1,7 +1,7 @@
 #include <Servo.h>
 Servo myservo;
-
 //#define DEBUG 
+
 
 #ifdef DEBUG
   #define DEBUG_PRINT(x) Serial.print(x)
@@ -13,17 +13,12 @@ Servo myservo;
   #define DEBUG_PRINTLN(x) 
 #endif
 
-
 #define PIN_subir 11
 #define PIN_bajar 12
 #define PIN_N 13
 #define PIN_motor_subir 9
 #define PIN_motor_bajar 10
 #define PIN_display_N 8 
-
-//#define PIN_RPM_RX 9
-//#define PIN_RPM_TX 10
-
 
 #define SUBE HIGH
 #define BAJA LOW
@@ -32,11 +27,11 @@ Servo myservo;
 
 #define REFRESCO 600
 
-boolean leva_subir = 0;
-boolean leva_bajar = 0;
+uint8_t leva_subir = 0;
+uint8_t leva_bajar = 0;
 boolean neutral = 0;
-boolean status_leva_subir = 0;
-boolean status_leva_bajar = 0;
+boolean status_leva_subir = 1;
+boolean status_leva_bajar = 1;
 byte marcha = 0;
 byte marcha_ant = 1;
 
@@ -187,8 +182,6 @@ pinMode(data, OUTPUT);
 
 void loop(){
    
-   
-
     leerEntradas();
     compruebaRPM();
 
@@ -196,7 +189,6 @@ void loop(){
         activarMarcha();
     }
 
-    
      displayDatos();
 
 }
@@ -207,6 +199,7 @@ void leerEntradas()
 
     leva_subir = digitalRead(PIN_subir);
     leva_bajar = digitalRead(PIN_bajar);
+
     neutral = digitalRead(PIN_N);
 }
 
@@ -336,23 +329,20 @@ boolean compruebaMarcha(){
  }
  
 void displayDatos(){
-    //DEBUG_PRINTLN(rpm);
-    //delay(200);
-    
+       
     if (mymillis-millis() >=REFRESCO){
 
       mymillis=millis();
-      //tm.displayIntNum(marcha, false);
+   
       if (marcha!=marcha_ant){
         for (byte i=0;i<8;i++){tm.setLED(i,0);}
       marcha_ant=marcha;
       }
       tm.setLED(marcha-1, 1);
       tm.displayIntNum(rpm, true);
-      //Serial.println(rpm);
+   
     }
-    
-    //delay(20);
+      
  }
 
 
@@ -362,7 +352,6 @@ void activarMarcha(){
 
     if(status_leva_subir!=leva_subir){
             if(marcha>=1 && marcha<6 && leva_subir==1){
-                //digitalWrite(PIN_motor_subir,HIGH);
                 actuaMotor(SUBE,HIGH);
                 delay(DELAY_SUBIR_MARCHA);
                 actuaMotor(SUBE,LOW);
@@ -377,7 +366,6 @@ void activarMarcha(){
 if (rpm<maxRPMbajar){
     if(status_leva_bajar!=leva_bajar){
         if (marcha<=6 && marcha>=2 && leva_bajar==1){
-                    //digitalWrite(PIN_motor_bajar,HIGH);
                     actuaMotor(BAJA,HIGH);
                     delay(DELAY_BAJAR_MARCHA);
                     actuaMotor(BAJA,LOW);
