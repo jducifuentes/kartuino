@@ -1,7 +1,5 @@
 #include <Servo.h>
 Servo myservo;
-int pos = 0;
-
 
 //#define DEBUG 
 
@@ -320,15 +318,15 @@ boolean compruebaMarcha(){
   //  }
   
    if (direccion == SUBE and activa == HIGH){
-        myservo.write(90);
+        myservo.write(180);
         digitalWrite(PIN_motor_subir,HIGH);
  
-   }else if (direccion==BAJA and activa == HIGH){
-     myservo.write(180);
+   }else if (direccion == BAJA and activa == HIGH){
+     myservo.write(0);
       digitalWrite(PIN_motor_bajar,HIGH);
    }
  if (activa == LOW){
-      myservo.write(0);
+      myservo.write(90);
       digitalWrite(PIN_motor_bajar,LOW);
       digitalWrite(PIN_motor_subir,LOW);
 
@@ -389,7 +387,7 @@ if (rpm<maxRPMbajar){
     status_leva_bajar=leva_bajar;
     }
 }
-    
+
 }
 
 
