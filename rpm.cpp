@@ -1,63 +1,9 @@
-#include <Servo.h>
-Servo myservo;
-//#define DEBUG 
+
+#include <Arduino.h>
+#include "rpm.h"
 
 
-#ifdef DEBUG
-  #define DEBUG_PRINT(x) Serial.print(x)
-  #define DEBUG_PRINTDEC(x) Serial.print(x, DEC)
-  #define DEBUG_PRINTLN(x) Serial.println(x)
-#else
-  #define DEBUG_PRINT(x)
-  #define DEBUG_PRINTDEC(x)
-  #define DEBUG_PRINTLN(x) 
-#endif
 
-#define PIN_subir 11
-#define PIN_bajar 12
-#define PIN_N 13
-#define PIN_motor_subir 9
-#define PIN_motor_bajar 10
-#define PIN_display_N 8 
-
-#define SUBE HIGH
-#define BAJA LOW
-#define DELAY_SUBIR_MARCHA 200
-#define DELAY_BAJAR_MARCHA 200
-
-#define REFRESCO 600
-
-uint8_t leva_subir = 0;
-uint8_t leva_bajar = 0;
-boolean neutral = 0;
-boolean status_leva_subir = 1;
-boolean status_leva_bajar = 1;
-byte marcha = 0;
-byte marcha_ant = 1;
-
-uint16_t maxRPM = 12500;
-uint16_t rpm = 0;
-uint16_t maxRPMbajar = 7000;
-int tmpRPM = 5000; //variable temporal, este valor se debe leer de una entrada
-
-
-uint32_t tiempo_marcha_subir=millis(); //variables para el control del tiempo de  pulso de activacion del actuador
-uint32_t tiempo_marcha_bajar=millis();
-
-uint32_t mymillis=0; //contador de tiempo  para el refresco de la visualizacion de datos
-
-///**** temporal display 7 segmentos
-#include <TM1638plus.h>
-const int strobe = 5;
-const int clock = 6;
-const int data = 7;
-
-bool high_freq = false; //default false,, If using a high freq CPU > ~100 MHZ set to true. 
-//Constructor object (GPIO STB , GPIO CLOCK , GPIO DIO, use high freq MCU default false)
-TM1638plus tm(strobe, clock ,data, high_freq);
-///****
-
-// *** ** ** * *** ** ** **** * ** *  Chapuzas del puto arduino
 
 
 ///////////////
@@ -131,81 +77,10 @@ unsigned long average;  // The RPM value after applying the smoothing.
 
 unsigned int sensorValue = 0;  // variable to store the value coming from the sensor
 
-/// **** *** ** * ** * ** * ** * chapuzas del puto arduino 
+extern uint16_t RPMS;
 
-
-void setup()
-{
-myservo.attach(4);
-
-
-// // //  **** temporal display 7 segmentos
-pinMode(strobe, OUTPUT);
-pinMode(clock, OUTPUT);
-pinMode(data, OUTPUT);
-
-  tm.displayBegin();
-  delay(500);
- // Test 0 reset test
-  tm.setLED(0, 1);
-  delay(500);
-  tm.reset();
-  tm.displayIntNum(marcha, false);
-
-// ****
-
-    Serial.begin(9600);
-
-    pinMode(PIN_bajar,INPUT);
-    pinMode(PIN_subir,INPUT);
-    pinMode(PIN_N,INPUT);
-    pinMode(PIN_motor_bajar,OUTPUT);
-    pinMode(PIN_motor_subir,OUTPUT);
-    pinMode(PIN_display_N,OUTPUT);
-
-    
-    while(digitalRead(PIN_N)){ 
-        Serial.println("Esperando Neutral.....");
-        delay(1000);
-        digitalWrite(PIN_display_N,HIGH);
-
-
-    } 
-    Serial.println("Empezando la fiesta....");
-    marcha = 1;
-
-
-  attachInterrupt(digitalPinToInterrupt(2), Pulse_Event, RISING);  // Enable interruption pin 2 when going from LOW to HIGH.
-
-
-}
-
-void loop(){
-   
-    leerEntradas();
-    compruebaRPM();
-
-    if (compruebaMarcha()){
-        activarMarcha();
-    }
-
-     displayDatos();
-
-}
-
-
-void leerEntradas()
-{
-
-    leva_subir = digitalRead(PIN_subir);
-    leva_bajar = digitalRead(PIN_bajar);
-
-    neutral = digitalRead(PIN_N);
-}
 
 void compruebaRPM(){
-
-
 
  LastTimeCycleMeasure = LastTimeWeMeasured;  // Store the LastTimeWeMeasured in a variable.
  CurrentMicros = micros();  // Store the micros() in a variable.
@@ -258,125 +133,11 @@ void compruebaRPM(){
   // Calculate the average:
   average = total / numReadings;  // The average value it's the smoothed result.
 
-  rpm=average;
+  RPMS=average;
 
 }
- 
 
 
-void(* resetFunc) (void) = 0; //declare reset function @ address 0
-
-boolean compruebaMarcha(){
-
-  //TODO control de cuantas marchas se piden y cuantas se activan. Leer sensores hall de entrada de marcha
-
-
-    if(neutral==1){
-        digitalWrite(PIN_display_N,HIGH);
-        resetFunc();  //call reset
-        
-    }
-    
-    // //ñapa para desactivar los actuadores y no meter un delay
-    //     if (millis()-tiempo_marcha_subir>DELAY_SUBIR_MARCHA){
-    //               //digitalWrite(PIN_motor_subir,LOW);
-    //               actuaMotor(SUBE,LOW);
-    //               tiempo_marcha_subir=millis();
-    //             }
-
-    //     if (millis()-tiempo_marcha_bajar>DELAY_BAJAR_MARCHA){
-    //               //digitalWrite(PIN_motor_bajar,LOW);
-    //               actuaMotor(BAJA,LOW);
-    //               tiempo_marcha_bajar=millis();
-    //             }
-
-
-    if((rpm<maxRPM) && (marcha>=1 && marcha<=6)) {
-        digitalWrite(PIN_display_N,LOW);
-        return true;
-    }
-    else {
-    return false;
-    }
-
-    
- }
- void actuaMotor(boolean direccion, boolean activa){
-
-  //  if (direccion == SUBE){
-  //    digitalWrite(PIN_motor_subir,activa);
-     
-  //  }else if (direccion==BAJA){
-  //    digitalWrite(PIN_motor_bajar,activa);
-  //  }
-  
-   if (direccion == SUBE and activa == HIGH){
-        myservo.write(180);
-        digitalWrite(PIN_motor_subir,HIGH);
- 
-   }else if (direccion == BAJA and activa == HIGH){
-     myservo.write(0);
-      digitalWrite(PIN_motor_bajar,HIGH);
-   }
- if (activa == LOW){
-      myservo.write(90);
-      digitalWrite(PIN_motor_bajar,LOW);
-      digitalWrite(PIN_motor_subir,LOW);
-
-  }
-
-
- }
- 
-void displayDatos(){
-       
-    if (mymillis-millis() >=REFRESCO){
-
-      mymillis=millis();
-   
-      if (marcha!=marcha_ant){
-        for (byte i=0;i<8;i++){tm.setLED(i,0);}
-      marcha_ant=marcha;
-      }
-      tm.setLED(marcha-1, 1);
-      tm.displayIntNum(rpm, true);
-   
-    }
-      
- }
-
-
-
-void activarMarcha(){
-//TODO caso de la primera
-
-    if(status_leva_subir!=leva_subir){
-            if(marcha>=1 && marcha<6 && leva_subir==1){
-                actuaMotor(SUBE,HIGH);
-                delay(DELAY_SUBIR_MARCHA);
-                actuaMotor(SUBE,LOW);
-                
-
-                marcha++;
-                //DEBUG_PRINTLN("   Sube   ");
-            }
-    status_leva_subir=leva_subir;
-    }
-
-if (rpm<maxRPMbajar){
-    if(status_leva_bajar!=leva_bajar){
-        if (marcha<=6 && marcha>=2 && leva_bajar==1){
-                    actuaMotor(BAJA,HIGH);
-                    delay(DELAY_BAJAR_MARCHA);
-                    actuaMotor(BAJA,LOW);
-                    marcha--;
-                    //DEBUG_PRINTLN("   Baja   ");
-                }
-    status_leva_bajar=leva_bajar;
-    }
-}
-
-}
 
 
 
